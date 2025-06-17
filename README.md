@@ -2,18 +2,120 @@ Download first 22 speakers and alignments:
 
 https://drive.google.com/file/d/1fDsKDHVsStDtCrt2fU08uSac-Y1d_ImT/view?usp=drive_link
 
-The GRID corpus [https://spandh.dcs.shef.ac.uk/gridcorpus/] is a comprehensive audiovisual database containing sentences spoken by 34 speakers (18 males and 16 females) in English. Each speaker utters 1,000 sentences, resulting in a total of 34,000 audio and video recordings. The sentences in the GRID corpus follow a specific structure, where each sentence adheres to the following pattern: command (4 options) + color (4 options) + preposition (4 options) + letter (25 options) + digit (10 options) + adverb (4 options). This approach allows for the generation of up to 64,000 unique sentences, such as: "set blue by four please" or "place red at C zero again."
+# 🧠 Lipreading Neural Network – Visual Speech Recognition from Video
 
-![slika1](https://github.com/user-attachments/assets/aeb40ed1-8538-49f9-9212-50851dc2a226)
+This project is the result of my **Bachelor thesis** and presents a complete deep learning pipeline for **visual speech recognition (lipreading)** using video recordings **without any audio input**.
 
-The data processing procedure begins with the analysis of each individual frame of the video, where the face in the video needs to be identified. The dlib library was used for face detection. After detecting the face (in the case of the GRID corpus, only one face is present in each video), landmarks defining the lips are identified, and a 64x64 pixel region around the lips is cropped. Each frame is then converted to grayscale. The frames are grouped into a list, which is subsequently transformed into a tensor, standardized, and finally prepared for input into the neural network. An example of a prepared frame for the neural network is shown in the figure.
+It implements a full system for automatic transcription of spoken sentences by analyzing only **lip movements**. The model is trained and evaluated on the [GRID corpus](https://spandh.dcs.shef.ac.uk/gridcorpus/), a standardized dataset used in visual speech research.
 
-![slika2](https://github.com/user-attachments/assets/f07699a0-d8cf-4d4b-aa7b-f19662007f5a)
+---
 
-Before the processed data is passed to the model, it must be organized into the appropriate dataset. This process begins by identifying the path to the folder containing the video recordings. After that, the data (video recordings) are randomly shuffled to reduce the risk of overfitting. Next, the data are aligned with the corresponding labels for each frame. The data are grouped into batches of size 2, with each batch padded to dimensions of ([75, 64, 64], [40]), where 75 represents the length of the video, 64x64 corresponds to the width and height of the frames, and 40 is the number of possible characters associated with each frame. Prefetching is used to optimize performance by asynchronously loading data in advance. The data are then split into training and test sets: the first 25 speakers are used for training the model, while the remaining 8 speakers are used for validating the algorithm.
+## 🎯 Objective
 
-![model](https://github.com/user-attachments/assets/d019d108-8b58-4907-b340-08813a53ec20)
+To build a deep neural network that can recognize spoken language based solely on video data, enabling robust and silent speech interfaces for accessibility, human-computer interaction, and noisy environments.
 
-The CTC loss function is used for training the neural network. To optimally monitor the training process, various callback functions have been implemented. Among them is a scheduler that maintains a constant learning rate during the first 30 epochs, after which it decays exponentially, allowing the network to converge more effectively.
+---
 
-The Adam optimizer, known for its efficiency and robustness in gradient-based learning, is used for model optimization, with the initial learning rate set to 0.0001. The training process spans 450 epochs, changing speakers every 50 epochs, during which the network gradually adjusts to achieve the best possible performance on the task while avoiding overfitting.
+## 🗃 Dataset: GRID Corpus
+
+- 34 speakers (18 male, 16 female), each uttering 1,000 sentences.
+- Sentences follow a fixed grammar:
+hile avoiding overfitting.
+
+- First 22 speakers used for training/testing in this project.
+- Download link for dataset (preprocessed subset):  
+[📦 Download (Google Drive)](https://drive.google.com/file/d/1fDsKDHVsStDtCrt2fU08uSac-Y1d_ImT/view?usp=drive_link)
+
+---
+
+## 🧪 Preprocessing Pipeline
+
+All preprocessing is custom-built using `dlib`, `OpenCV`, and `TensorFlow`:
+
+- **Face detection** per frame using dlib.
+- **Lip region extraction** based on facial landmarks (points 48–68).
+- **Grayscale conversion** and resizing to 64×64.
+- **Standardization** across frames (mean/std).
+- **Label extraction** from `.align` files (excluding silences).
+- **Tokenization** using a 41-character vocabulary (`a-z`, `'`, `?`, `!`, `1–9`, space).
+
+Input tensors: `(75, 64, 64, 1)`  
+Label tensors: `(40,)`
+
+---
+
+## 🧠 Model Architecture
+
+Custom 3D-CNN + BiGRU model implemented in TensorFlow/Keras:
+
+| Layer Type     | Configuration                         |
+|----------------|----------------------------------------|
+| Conv3D (x3)    | Filters: 128 → 256 → 64, Kernel: 3x3x3 |
+| MaxPool3D      | Pooling: (1,2,2) after each conv block |
+| TimeDistributed| Flatten over spatial dims              |
+| BiGRU (x2)     | 128 units each, dropout 0.5            |
+| Dense          | 41-class softmax output                |
+
+- Output shape: `(batch_size, 75, 41)`
+- Loss: **CTC Loss** (`ctc_batch_cost`)
+- Optimizer: **Adam**, LR = 0.0001
+- LR Scheduler: flat for 50 epochs → exponential decay every 50
+
+---
+
+## ⚙️ Training Strategy
+
+- **500 epochs** total.
+- Speaker changes every 50 epochs to improve generalization.
+- Custom callbacks:
+- `ProduceExample`: shows predictions after each epoch.
+- `SaveHistoryCallback`: logs metrics every 5 epochs.
+- `ModelCheckpoint`: saves weights to `/Weights`.
+
+---
+
+## ✅ Results & Use Cases
+
+The model performs well on unseen speakers and shows potential for:
+
+- Real-time webcam lipreading
+- Assistive technologies for the hearing-impaired
+- Speech interface in silent or noisy environments
+- Integration into multimodal voice assistants (e.g. fallback when audio is missing)
+
+---
+
+## 📂 Project Structure
+
+lipreading-cv-nlp/
+├── model.py # CNN + BiGRU model definition
+├── preprocessing.py # Preprocessing, alignment, vocab
+├── train.py # Training loop & callbacks
+├── datapipeline.py # tf.data batching and setup
+├── Weights/ # Checkpointed weights
+├── history_logs/ # Loss/accuracy logs
+└── README.md
+
+
+---
+
+## 🚀 Future Work
+
+- Add real-time inference from webcam (OpenCV + live model).
+- Improve robustness using transformer-based language models.
+- Combine with intent recognition for audio-free voice assistants.
+- Deploy on edge devices (Raspberry Pi, Jetson Nano).
+
+---
+
+## 🧑‍💻 Author
+
+**Dragomir Bozoki**  
+Bachelor in Biomedical Engineering – Final Year Project  
+Contact: [LinkedIn](https://www.linkedin.com/in/dragomirbozoki) · [GitHub](https://github.com/DragomirBozoki)
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
