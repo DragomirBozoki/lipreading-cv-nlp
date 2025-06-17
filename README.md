@@ -112,7 +112,6 @@ lipreading-cv-nlp/
 
 **Dragomir Bozoki**  
 Bachelor in Biomedical Engineering – Final Year Project  
-Contact: [LinkedIn](https://www.linkedin.com/in/dragomirbozoki) · [GitHub](https://github.com/DragomirBozoki)
 
 ---
 
